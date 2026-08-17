@@ -15,6 +15,16 @@ jobs:
         run: |
           bandit -r backend/ || true
           pip-audit || true
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Frontend install & test
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run test -- --run
+          npm run build
       - name: Setup AWS SAM
         uses: aws-actions/setup-sam@v2
       - name: SAM validate + build
