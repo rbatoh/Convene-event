@@ -27,6 +27,7 @@ jobs:
           sam deploy --stack-name event-registration-staging \
                      --resolve-s3 \
                      --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+                     --parameter-overrides EnvironmentName=staging \
                      --no-confirm-changeset \
                      --no-fail-on-empty-changeset
       - run: |
@@ -71,6 +72,7 @@ jobs:
           sam deploy --stack-name event-registration-production \
                      --resolve-s3 \
                      --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+                     --parameter-overrides EnvironmentName=production \
                      --no-confirm-changeset \
                      --no-fail-on-empty-changeset
       - run: |

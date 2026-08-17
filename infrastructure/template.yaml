@@ -3,10 +3,20 @@ Transform: AWS::Serverless-2016-10-31
 Description: Event Registration & Ticketing System Backend (Free Tier Edition)
 
 Parameters:
+  EnvironmentName:
+    Type: String
+    Description: The deployment environment (staging or production)
+    Default: staging
+    AllowedValues:
+      - staging
+      - production
   OpsEmail:
     Type: String
     Description: Email address for operational alerts (CloudWatch Alarms)
     Default: ops@example.com
+
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentName, "production"]
 
 Globals:
   Function:
@@ -59,9 +69,11 @@ Resources:
     Properties:
       DistributionConfig:
         Enabled: true
-        Aliases:
-          - cloudbiomed.online
-          - www.cloudbiomed.online
+        Aliases: !If 
+          - IsProduction
+          - - cloudbiomed.online
+            - www.cloudbiomed.online
+          - !Ref "AWS::NoValue"
         ViewerCertificate:
           AcmCertificateArn: arn:aws:acm:us-east-1:602942261484:certificate/61c94d49-0499-4e2e-8a40-e65bc34ab0e5
           SslSupportMethod: sni-only
