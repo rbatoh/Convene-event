@@ -12,8 +12,9 @@ jobs:
     environment: staging
     permissions: { id-token: write, contents: read }
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: sam-build }
+        with: { name: sam-build, path: .aws-sam/build }
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
@@ -53,8 +54,9 @@ jobs:
     environment: production
     permissions: { id-token: write, contents: read }
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: sam-build }
+        with: { name: sam-build, path: .aws-sam/build }
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
