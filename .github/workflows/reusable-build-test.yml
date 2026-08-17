@@ -22,7 +22,7 @@ jobs:
       - name: Frontend install & test
         working-directory: frontend
         run: |
-          npm ci
+          npm install
           npm run test -- --run
           npm run build
       - name: Setup AWS SAM
