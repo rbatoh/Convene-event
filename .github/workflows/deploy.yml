@@ -21,6 +21,8 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
       - name: Setup AWS SAM
         uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
       - run: |
           sam deploy --stack-name event-registration-staging \
                      --resolve-s3 \
@@ -63,6 +65,8 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
       - name: Setup AWS SAM
         uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
       - run: |
           sam deploy --stack-name event-registration-production \
                      --resolve-s3 \
