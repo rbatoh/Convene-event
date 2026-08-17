@@ -1,0 +1,12 @@
+name: Setup backend environment
+description: Checkout, Python, and cached dependency install shared by every job
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with: { python-version: "3.13", cache: pip }
+    - shell: bash
+      run: |
+        pip install -r backend/requirements.txt --break-system-packages
+        pip install -r requirements-dev.txt --break-system-packages

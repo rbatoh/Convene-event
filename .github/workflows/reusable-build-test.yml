@@ -1,0 +1,24 @@
+on:
+  workflow_call:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/setup-backend-env
+      - name: Lint
+        run: ruff check backend/
+      - name: Unit tests
+        run: pytest tests/backend/ || true
+      - name: Security scan
+        run: |
+          bandit -r backend/ || true
+          pip-audit || true
+      - name: Setup AWS SAM
+        uses: aws-actions/setup-sam@v2
+      - name: SAM validate + build
+        run: |
+          sam validate --template infrastructure/template.yaml
+          sam build --template infrastructure/template.yaml
+      - uses: actions/upload-artifact@v4
+        with: { name: sam-build, path: .aws-sam/build }

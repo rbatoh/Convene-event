@@ -1,0 +1,89 @@
+name: Deploy
+on:
+  push:
+    branches: [main]
+jobs:
+  build-test:
+    uses: ./.github/workflows/reusable-build-test.yml
+
+  deploy-staging:
+    needs: build-test
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions: { id-token: write, contents: read }
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: sam-build }
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Setup AWS SAM
+        uses: aws-actions/setup-sam@v2
+      - run: |
+          sam deploy --stack-name event-registration-staging \
+                     --resolve-s3 \
+                     --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+                     --no-confirm-changeset \
+                     --no-fail-on-empty-changeset
+      - run: |
+          FRONTEND_BUCKET=$(aws cloudformation describe-stacks --stack-name event-registration-staging --query 'Stacks[0].Outputs[?OutputKey==`FrontendBucketName`].OutputValue' --output text)
+          CLOUDFRONT_ID=$(aws cloudformation describe-stacks --stack-name event-registration-staging --query 'Stacks[0].Outputs[?OutputKey==`CloudFrontDistributionId`].OutputValue' --output text)
+          REGISTER_URL=$(aws cloudformation describe-stacks --stack-name event-registration-staging --query 'Stacks[0].Outputs[?OutputKey==`RegisterFunctionUrl`].OutputValue' --output text)
+          EVENTS_URL=$(aws cloudformation describe-stacks --stack-name event-registration-staging --query 'Stacks[0].Outputs[?OutputKey==`EventsFunctionUrl`].OutputValue' --output text)
+          REGS_URL=$(aws cloudformation describe-stacks --stack-name event-registration-staging --query 'Stacks[0].Outputs[?OutputKey==`RegistrationsFunctionUrl`].OutputValue' --output text)
+          CANCEL_URL=$(aws cloudformation describe-stacks --stack-name event-registration-staging --query 'Stacks[0].Outputs[?OutputKey==`CancelFunctionUrl`].OutputValue' --output text)
+          
+          echo "export const config = {" > frontend/src/config.js
+          echo "    API_EVENTS: '${EVENTS_URL}'," >> frontend/src/config.js
+          echo "    API_REGISTER: '${REGISTER_URL}'," >> frontend/src/config.js
+          echo "    API_REGISTRATIONS: '${REGS_URL}'," >> frontend/src/config.js
+          echo "    API_CANCEL: '${CANCEL_URL}'" >> frontend/src/config.js
+          echo "};" >> frontend/src/config.js
+          
+          cd frontend
+          npm install
+          npm run build
+          aws s3 sync dist/ s3://${FRONTEND_BUCKET}/ --delete
+          aws cloudfront create-invalidation --distribution-id ${CLOUDFRONT_ID} --paths "/*"
+
+  deploy-production:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: production
+    permissions: { id-token: write, contents: read }
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: sam-build }
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Setup AWS SAM
+        uses: aws-actions/setup-sam@v2
+      - run: |
+          sam deploy --stack-name event-registration-production \
+                     --resolve-s3 \
+                     --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+                     --no-confirm-changeset \
+                     --no-fail-on-empty-changeset
+      - run: |
+          FRONTEND_BUCKET=$(aws cloudformation describe-stacks --stack-name event-registration-production --query 'Stacks[0].Outputs[?OutputKey==`FrontendBucketName`].OutputValue' --output text)
+          CLOUDFRONT_ID=$(aws cloudformation describe-stacks --stack-name event-registration-production --query 'Stacks[0].Outputs[?OutputKey==`CloudFrontDistributionId`].OutputValue' --output text)
+          REGISTER_URL=$(aws cloudformation describe-stacks --stack-name event-registration-production --query 'Stacks[0].Outputs[?OutputKey==`RegisterFunctionUrl`].OutputValue' --output text)
+          EVENTS_URL=$(aws cloudformation describe-stacks --stack-name event-registration-production --query 'Stacks[0].Outputs[?OutputKey==`EventsFunctionUrl`].OutputValue' --output text)
+          REGS_URL=$(aws cloudformation describe-stacks --stack-name event-registration-production --query 'Stacks[0].Outputs[?OutputKey==`RegistrationsFunctionUrl`].OutputValue' --output text)
+          CANCEL_URL=$(aws cloudformation describe-stacks --stack-name event-registration-production --query 'Stacks[0].Outputs[?OutputKey==`CancelFunctionUrl`].OutputValue' --output text)
+          
+          echo "export const config = {" > frontend/src/config.js
+          echo "    API_EVENTS: '${EVENTS_URL}'," >> frontend/src/config.js
+          echo "    API_REGISTER: '${REGISTER_URL}'," >> frontend/src/config.js
+          echo "    API_REGISTRATIONS: '${REGS_URL}'," >> frontend/src/config.js
+          echo "    API_CANCEL: '${CANCEL_URL}'" >> frontend/src/config.js
+          echo "};" >> frontend/src/config.js
+          
+          cd frontend
+          npm install
+          npm run build
+          aws s3 sync dist/ s3://${FRONTEND_BUCKET}/ --delete
+          aws cloudfront create-invalidation --distribution-id ${CLOUDFRONT_ID} --paths "/*"

@@ -1,0 +1,46 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Set up GitHub OIDC Provider and Deployment Role for GitHub Actions
+
+Parameters:
+  GitHubOrg:
+    Type: String
+    Description: GitHub organization or user name (e.g., 'octocat')
+  GitHubRepo:
+    Type: String
+    Description: GitHub repository name (e.g., 'event-registration-ticketing-system')
+
+Resources:
+  # Conditionally create the OIDC provider (an account can only have one per URL)
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ThumbprintList:
+        - "6938fd4d98bab03faadb97b34396831e3780aea1"
+        - "1c58a3a8518e8759bf075b76b750d4f2df264fcd"
+      ClientIdList:
+        - sts.amazonaws.com
+
+  GitHubDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "github-actions-deploy-role-${AWS::Region}"
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Action: sts:AssumeRoleWithWebIdentity
+            Principal:
+              Federated: !Ref GitHubOidcProvider
+            Condition:
+              StringEquals:
+                "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+              StringLike:
+                "token.actions.githubusercontent.com:sub": !Sub "repo:${GitHubOrg}/${GitHubRepo}:*"
+      # Grant full permissions required for SAM / CloudFormation deployments
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+
+Outputs:
+  DeployRoleArn:
+    Description: Role ARN to add to GitHub Secrets as AWS_ROLE_ARN
+    Value: !GetAtt GitHubDeployRole.Arn

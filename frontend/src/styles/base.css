@@ -1,0 +1,89 @@
+@import './tokens.css';
+
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: var(--font-family-base);
+    font-size: var(--font-size-body);
+    font-weight: var(--font-weight-body);
+    line-height: var(--line-height-body);
+    background-color: var(--color-background);
+    color: var(--color-on-background);
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+a {
+    text-decoration: none;
+    color: inherit;
+}
+
+button {
+    cursor: pointer;
+    border: none;
+    background: none;
+    font-family: inherit;
+}
+
+input {
+    font-family: inherit;
+}
+
+/* Typography Classes */
+.marketing-hero {
+    font-size: var(--font-size-marketing-hero);
+    font-weight: var(--font-weight-marketing-hero);
+    line-height: var(--line-height-marketing-hero);
+    letter-spacing: var(--letter-spacing-marketing-hero);
+}
+
+.marketing-hero-mobile {
+    font-size: var(--font-size-marketing-hero-mobile);
+    font-weight: var(--font-weight-marketing-hero-mobile);
+    line-height: var(--line-height-marketing-hero-mobile);
+}
+
+.page-heading {
+    font-size: var(--font-size-page-heading);
+    font-weight: var(--font-weight-page-heading);
+    line-height: var(--line-height-page-heading);
+}
+
+.section-heading {
+    font-size: var(--font-size-section-heading);
+    font-weight: var(--font-weight-section-heading);
+    line-height: var(--line-height-section-heading);
+}
+
+.card-title {
+    font-size: var(--font-size-card-title);
+    font-weight: var(--font-weight-card-title);
+    line-height: var(--line-height-card-title);
+}
+
+.ui-label {
+    font-size: var(--font-size-ui-label);
+    font-weight: var(--font-weight-ui-label);
+    line-height: var(--line-height-ui-label);
+}
+
+/* Layout Utilities */
+.max-w-desktop {
+    max-width: 1280px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.justify-center { justify-content: center; }
+.w-full { width: 100%; }
+.h-full { height: 100%; }

@@ -1,0 +1,534 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Event Registration & Ticketing System Backend (Free Tier Edition)
+
+Parameters:
+  OpsEmail:
+    Type: String
+    Description: Email address for operational alerts (CloudWatch Alarms)
+    Default: ops@example.com
+
+Globals:
+  Function:
+    Runtime: python3.13
+    MemorySize: 256
+    Timeout: 10
+    Tracing: Active
+    Layers:
+      - !Ref CommonLayer
+    Environment:
+      Variables:
+        EVENTS_TABLE: !Ref EventsTable
+        REGISTRATIONS_TABLE: !Ref RegistrationsTable
+        POWERTOOLS_SERVICE_NAME: "EventRegistration"
+
+Resources:
+  # ---------------------------------------------------------
+  # Frontend Hosting
+  # ---------------------------------------------------------
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  CloudFrontOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub "OAI for ${AWS::StackName}"
+
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOriginAccessIdentity}"
+            Action: 's3:GetObject'
+            Resource: !Sub "${FrontendBucket.Arn}/*"
+
+  FrontendDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Aliases:
+          - cloudbiomed.online
+          - www.cloudbiomed.online
+        ViewerCertificate:
+          AcmCertificateArn: arn:aws:acm:us-east-1:602942261484:certificate/61c94d49-0499-4e2e-8a40-e65bc34ab0e5
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+        DefaultRootObject: index.html
+        Origins:
+          - DomainName: !GetAtt FrontendBucket.RegionalDomainName
+            Id: S3Origin
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}"
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+        CustomErrorResponses:
+          - ErrorCode: 404
+            ResponsePagePath: /index.html
+            ResponseCode: 200
+          - ErrorCode: 403
+            ResponsePagePath: /index.html
+            ResponseCode: 200
+
+  # ---------------------------------------------------------
+  # Shared Resources (Layer & Database)
+  # ---------------------------------------------------------
+  CommonLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      ContentUri: ../backend/common/
+      CompatibleRuntimes:
+        - python3.13
+      Description: Shared Python libraries for event registration backend
+
+  EventsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PROVISIONED
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      AttributeDefinitions:
+        - AttributeName: eventId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: eventId
+          KeyType: HASH
+
+  RegistrationsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PROVISIONED
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      AttributeDefinitions:
+        - AttributeName: registrationId
+          AttributeType: S
+        - AttributeName: email
+          AttributeType: S
+        - AttributeName: registrationDate
+          AttributeType: S
+        - AttributeName: eventId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: registrationId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: EmailIndex
+          KeySchema:
+            - AttributeName: email
+              KeyType: HASH
+            - AttributeName: registrationDate
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5
+        - IndexName: EventIndex
+          KeySchema:
+            - AttributeName: eventId
+              KeyType: HASH
+            - AttributeName: registrationId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5
+
+  # ---------------------------------------------------------
+  # Lambda Functions
+  # ---------------------------------------------------------
+  RegisterFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/register/
+      Handler: lambda_function.handler
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - "*"
+          AllowMethods:
+            - POST
+          AllowHeaders:
+            - content-type
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:UpdateItem
+                - dynamodb:GetItem
+              Resource: !GetAtt EventsTable.Arn
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+              Resource: !GetAtt RegistrationsTable.Arn
+
+  EventsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/events/
+      Handler: lambda_function.handler
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - "*"
+          AllowMethods:
+            - GET
+          AllowHeaders:
+            - content-type
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Scan
+              Resource: !GetAtt EventsTable.Arn
+
+  RegistrationsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/registrations/
+      Handler: lambda_function.handler
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - "*"
+          AllowMethods:
+            - GET
+          AllowHeaders:
+            - content-type
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Query
+              Resource: !Sub "${RegistrationsTable.Arn}/index/EmailIndex"
+
+  CancelRegistrationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/cancel_registration/
+      Handler: lambda_function.handler
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - "*"
+          AllowMethods:
+            - DELETE
+          AllowHeaders:
+            - content-type
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:UpdateItem
+                - dynamodb:DeleteItem
+              Resource:
+                - !GetAtt EventsTable.Arn
+                - !GetAtt RegistrationsTable.Arn
+
+  # ---------------------------------------------------------
+  # Notifications
+  # ---------------------------------------------------------
+  NotificationDLQ:
+    Type: AWS::SQS::Queue
+
+  NotificationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/notifications/
+      Handler: lambda_function.handler
+      Events:
+        Stream:
+          Type: DynamoDB
+          Properties:
+            Stream: !GetAtt RegistrationsTable.StreamArn
+            StartingPosition: TRIM_HORIZON
+            BatchSize: 10
+            MaximumRetryAttempts: 3
+            DestinationConfig:
+              OnFailure:
+                Destination: !GetAtt NotificationDLQ.Arn
+            FilterCriteria:
+              Filters:
+                - Pattern: "{ \"dynamodb\": { \"NewImage\": { \"itemType\": { \"S\": [ \"REGISTRATION\" ] } } } }"
+                - Pattern: "{ \"dynamodb\": { \"NewImage\": { \"status\": { \"S\": [ \"CANCELLED\" ] } } } }"
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+              Resource: "*"
+        - Statement:
+            - Effect: Allow
+              Action:
+                - sqs:SendMessage
+              Resource: !GetAtt NotificationDLQ.Arn
+
+  # ---------------------------------------------------------
+  # Alarms & Monitoring
+  # ---------------------------------------------------------
+  OpsSNSTopic:
+    Type: AWS::SNS::Topic
+    
+  OpsSNSSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint: !Ref OpsEmail
+      Protocol: email
+      TopicArn: !Ref OpsSNSTopic
+
+  # 1. Register function error rate
+  RegisterErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Register Function Errors"
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref RegisterFunction
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref OpsSNSTopic
+
+  # 2. Register function throttles
+  RegisterThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Register Function Throttles"
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref RegisterFunction
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref OpsSNSTopic
+
+  # 3. Cancel function errors
+  CancelErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Cancel Function Errors"
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CancelRegistrationFunction
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref OpsSNSTopic
+
+  # 4. Notification function errors
+  NotificationErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Notification Function Errors"
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref NotificationFunction
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref OpsSNSTopic
+
+  # 5. Events function errors
+  EventsErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Events Function Errors"
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref EventsFunction
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref OpsSNSTopic
+
+  # 6. Registrations lookup errors
+  RegistrationsErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Registrations Lookup Errors"
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref RegistrationsFunction
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref OpsSNSTopic
+
+  # 7. Events table throttles
+  EventsTableThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Events Table Throttles"
+      Namespace: AWS/DynamoDB
+      MetricName: ThrottledRequests
+      Dimensions:
+        - Name: TableName
+          Value: !Ref EventsTable
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref OpsSNSTopic
+
+  # 8. Registrations table throttles
+  RegistrationsTableThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Registrations Table Throttles"
+      Namespace: AWS/DynamoDB
+      MetricName: ThrottledRequests
+      Dimensions:
+        - Name: TableName
+          Value: !Ref RegistrationsTable
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref OpsSNSTopic
+
+  # 9. DLQ messages visible
+  DLQVisibleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Notification DLQ Messages Visible"
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt NotificationDLQ.QueueName
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref OpsSNSTopic
+
+  # 10. Estimated charges alarm
+  EstimatedChargesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Estimated Monthly Charges > $5"
+      Namespace: AWS/Billing
+      MetricName: EstimatedCharges
+      Dimensions:
+        - Name: Currency
+          Value: USD
+      Statistic: Maximum
+      Period: 21600 # 6 hours
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref OpsSNSTopic
+
+  CostBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: 5
+          Unit: USD
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+          Subscribers:
+            - SubscriptionType: SNS
+              Address: !Ref OpsSNSTopic
+
+Outputs:
+  RegisterFunctionUrl:
+    Description: URL for the Register Function
+    Value: !GetAtt RegisterFunctionUrl.FunctionUrl
+  EventsFunctionUrl:
+    Description: URL for the Events Function
+    Value: !GetAtt EventsFunctionUrl.FunctionUrl
+  RegistrationsFunctionUrl:
+    Description: URL for the Registrations Function
+    Value: !GetAtt RegistrationsFunctionUrl.FunctionUrl
+  CancelFunctionUrl:
+    Description: URL for the Cancel Function
+    Value: !GetAtt CancelRegistrationFunctionUrl.FunctionUrl
+  FrontendUrl:
+    Description: CloudFront Distribution URL
+    Value: !Sub "https://${FrontendDistribution.DomainName}"
+  FrontendBucketName:
+    Description: S3 Bucket Name for frontend assets
+    Value: !Ref FrontendBucket
+  CloudFrontDistributionId:
+    Description: CloudFront Distribution ID
+    Value: !Ref FrontendDistribution

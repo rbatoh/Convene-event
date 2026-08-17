@@ -1,0 +1,7 @@
+name: CI
+on:
+  pull_request:
+    branches: [main]
+jobs:
+  build-test:
+    uses: ./.github/workflows/reusable-build-test.yml

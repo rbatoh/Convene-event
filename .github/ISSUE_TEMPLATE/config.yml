@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/org/repo/tree/main/docs
+    about: Please check the docs folder for architecture and runbooks before filing an issue.

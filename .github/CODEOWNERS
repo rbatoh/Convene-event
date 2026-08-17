@@ -1,0 +1,4 @@
+/backend/             @org/backend-team
+/frontend/             @org/frontend-team
+/infrastructure/       @org/platform-team
+/.github/workflows/    @org/platform-team
