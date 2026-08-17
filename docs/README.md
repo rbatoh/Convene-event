@@ -3,10 +3,14 @@
 Welcome to the documentation for the Convene event registration platform.
 
 ## Table of Contents
-- [Architecture & Structural Design](architecture/ARCHITECTURE.md)
-- [Project Folder Structure](architecture/PROJECT_STRUCTURE.md)
-- [Architecture Decision Records (ADRs)](architecture/decisions/)
-- [UI & Brand Design Guidelines](design/app_ui.md)
-- [API Reference](api/API_REFERENCE.md)
-- [Runbooks](runbooks/)
-- [Onboarding & Local Setup](onboarding/)
+- [Architecture & Structural Design](architecture.md)
+- [Project Folder Structure](project-structure.md)
+- [Architecture Decision Records (ADRs)](adr/)
+- [UI & Brand Design Guidelines](app-ui.md)
+- [API Reference](api-reference.md)
+- [Runbook: Check Free Tier Usage](check-free-tier-usage.md)
+- [Runbook: Deploy and Rollback](deploy-and-rollback.md)
+- [Runbook: Incident Response](incident-response.md)
+- [Runbook: Rotate Admin Credentials](rotate-admin-credentials.md)
+- [Onboarding: Contributing](contributing.md)
+- [Onboarding: Local Dev Setup](local-dev-setup.md)
