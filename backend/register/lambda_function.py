@@ -1,12 +1,12 @@
 import json
 import uuid
-import hashlib
-from datetime import datetime
-from db_client import dynamodb_client, EVENTS_TABLE_NAME, REGISTRATIONS_TABLE_NAME
-from api_responses import success_response, error_response
+from datetime import datetime, timezone
+
+from api_responses import error_response, success_response
+from db_client import EVENTS_TABLE_NAME, REGISTRATIONS_TABLE_NAME, dynamodb_client
+from logging_utils import get_logger
 from rate_limit import check_rate_limit
 from validation import is_valid_email, normalize_email
-from logging_utils import get_logger
 
 logger = get_logger("RegisterFunction")
 
@@ -36,7 +36,7 @@ def handler(event, context):
 
     email = normalize_email(email)
     registration_id = f"REG-{uuid.uuid4()}"
-    registration_date = datetime.utcnow().isoformat() + "Z"
+    registration_date = datetime.now(timezone.utc).isoformat() + "Z"
     
     lock_key = f"LOCK#{event_id}#{email}"
 
@@ -49,7 +49,7 @@ def handler(event, context):
             return error_response("EVENT_NOT_FOUND", "Event not found.", 404)
         
         event_name = event_response['Item'].get('eventName', {'S': 'Unknown Event'})['S']
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.error(f"Error fetching event: {e}")
         return error_response("INTERNAL_ERROR", "Error fetching event.", 500)
 
@@ -118,6 +118,6 @@ def handler(event, context):
         
         logger.error(f"Transaction canceled for unknown reason: {reasons}")
         return error_response("INTERNAL_ERROR", "Transaction failed.", 500)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.error(f"Error during transaction: {e}")
         return error_response("INTERNAL_ERROR", "Internal server error.", 500)

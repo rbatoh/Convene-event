@@ -1,4 +1,5 @@
 import os
+
 import boto3
 from logging_utils import get_logger
 
@@ -43,4 +44,4 @@ def handler(event, context):
                 logger.info("Email sent successfully.")
             except Exception as e:
                 logger.error(f"Failed to send email to {email}: {e}")
-                raise e
+                raise

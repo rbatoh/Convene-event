@@ -1,7 +1,8 @@
 import json
 import urllib.parse
-from db_client import dynamodb_client, EVENTS_TABLE_NAME, REGISTRATIONS_TABLE_NAME
-from api_responses import success_response, error_response
+
+from api_responses import error_response, success_response
+from db_client import EVENTS_TABLE_NAME, REGISTRATIONS_TABLE_NAME, dynamodb_client
 from logging_utils import get_logger
 
 logger = get_logger("CancelRegistrationFunction")
@@ -11,8 +12,8 @@ def handler(event, context):
     try:
         body = json.loads(event.get('body', '{}') or '{}')
         registration_id = body.get('registrationId')
-    except:
-        pass
+    except Exception as e:  # noqa: BLE001
+        logger.debug(f"Failed to parse body: {e}")
         
     if not registration_id:
         raw_path = event.get('rawPath', '/')
@@ -84,6 +85,6 @@ def handler(event, context):
             "registrationId": registration_id,
             "status": "CANCELLED"
         })
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.error(f"Error cancelling registration: {e}")
         return error_response("INTERNAL_ERROR", "Internal server error.", 500)

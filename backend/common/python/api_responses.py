@@ -1,5 +1,6 @@
 import json
 
+
 def success_response(data, status_code=200):
     return {
         "statusCode": status_code,

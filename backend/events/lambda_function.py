@@ -1,5 +1,5 @@
+from api_responses import error_response, success_response
 from db_client import events_table
-from api_responses import success_response, error_response
 from logging_utils import get_logger
 
 logger = get_logger("EventsFunction")
@@ -29,6 +29,6 @@ def handler(event, context):
             })
             
         return success_response({"events": formatted_events})
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.error(f"Error listing events: {e}")
         return error_response("INTERNAL_ERROR", "Internal server error.", 500)

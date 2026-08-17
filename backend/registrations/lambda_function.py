@@ -1,8 +1,9 @@
 import urllib.parse
-from db_client import dynamodb_client, REGISTRATIONS_TABLE_NAME
-from api_responses import success_response, error_response
-from validation import normalize_email
+
+from api_responses import error_response, success_response
+from db_client import REGISTRATIONS_TABLE_NAME, dynamodb_client
 from logging_utils import get_logger
+from validation import normalize_email
 
 logger = get_logger("RegistrationsFunction")
 
@@ -42,6 +43,6 @@ def handler(event, context):
             })
             
         return success_response({"registrations": registrations})
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.error(f"Error looking up registrations: {e}")
         return error_response("INTERNAL_ERROR", "Internal server error.", 500)
