@@ -15,7 +15,7 @@ jobs:
           bandit -r backend/ || true
           pip-audit || true
       - name: Setup AWS SAM
-        uses: aws-actions/setup-sam@v2
+        uses: aws-actions/setup-sam@v3
       - name: SAM validate + build
         run: |
           sam validate --template infrastructure/template.yaml
